@@ -72,11 +72,13 @@ This solution leverages traditional Autoscale configuration management practices
 https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets)
  containing the BIG-IQ password used to obtain a license from the BIG-IQ. For example, to create a secret using the GCLOUD CLI: 
   ```bash
-  # Use an editor of your choice to create file called password.txt. Ensure there is no newline at the end of the file.
+  # Use an editor of your choice to create file called password.txt. 
+  # IMPORANT: Ensure there is no newline at the end of the file.
   $ gcloud secrets create mySecretId --data-file="password.txt"
   ```
   - *NOTE:*
     - By default, the secret name used is `mySecretId`. To change this, see [Changing the BIG-IP Deployment](#changing-the-big-ip-deployment) for more details.
+    - Ensure there is no newline at the end of the file. For example: `echo -n 'YourStrongPassword' > password.txt` where using "-n" option to avoid newlines. Otherwise, use an editor to not have in bash history.
 
 - This solution requires a Google Cloud account that can provision objects described in the solution using the gcloud CLI:
     ```bash
@@ -128,12 +130,12 @@ Note: These are specified in the configuration file. See sample_autoscale.yaml
 | appContainerName | No | 'f5devcentral/f5-demo-app:latest' | string | The name of a container to download and install which is used for the example application server. If this value is left blank, the application module template is not deployed. |
 | application | No | f5app | string | Application label. |
 | bigIpCoolDownPeriodSec | No | 60 | integer | Number of seconds Google Autoscaler waits to start checking BIG-IP instances on first boot. |
-| bigIpImageName | No | f5-bigip-16-1-2-1-0-0-10-byol-all-modules-2boot-loc-1222211103 | string | Name of BIG-IP custom image found in the Google Cloud Marketplace. Example value: `f5-bigip-16-1-2-1-0-0-10-payg-best-25mbps-211222203736`. You can find the names of F5 marketplace images in the README for this template or by running the command: `gcloud compute images list --project f5-7626-networks-public --filter="name~f5"`. |
+| bigIpImageName | No | f5-bigip-16-1-2-2-0-0-28-byol-all-modules-2boot-loc-0505081937 | string | Name of BIG-IP custom image found in the Google Cloud Marketplace. Example value: `f5-bigip-16-1-2-2-0-0-28-byol-all-modules-2boot-loc-0505081937`. You can find the names of F5 marketplace images in the README for this template or by running the command: `gcloud compute images list --project f5-7626-networks-public --filter="name~f5"`. |
 | bigIpInstanceTemplateVersion | No |  1 | integer | Version of the instance template to create. When updating deployment properties of the BIG-IP instances, you must provide a unique value for this parameter. |
 | bigIpInstanceType | No | n1-standard-4 | string | Instance type assigned to the application, for example 'n1-standard-4'. |
 | bigIpIpCidrRange | No | 10.0.0.0/24 | string | IP CIDR range used by the management network of the BIG-IP, for example '10.0.0.0/24'. |
-| bigIpRuntimeInitConfig | No | https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.1.0.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq-with-app.yaml | string | Supply a URL to the bigip-runtime-init configuration file in YAML or JSON format. |
-| bigIpRuntimeInitPackageUrl | No | https://cdn.f5.com/product/cloudsolutions/f5-bigip-runtime-init/v1.4.1/dist/f5-bigip-runtime-init-1.4.1-1.gz.run | string | Supply a URL to the bigip-runtime-init package. |
+| bigIpRuntimeInitConfig | No | https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.4.0.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq-with-app.yaml | string | Supply a URL to the bigip-runtime-init configuration file in YAML or JSON format. |
+| bigIpRuntimeInitPackageUrl | No | https://cdn.f5.com/product/cloudsolutions/f5-bigip-runtime-init/v1.5.0/dist/f5-bigip-runtime-init-1.5.0-1.gz.run | string | Supply a URL to the bigip-runtime-init package. |
 | bigIpScaleOutCpuThreshold | No | 0.8 | integer | High CPU Percentage threshold to begin scaling out BIG-IP VE instances. |
 | bigIpScalingMaxSize | No | 8 | integer | Maximum number of BIG-IP instances that can be created in the Auto Scale Group. |
 | bigIpScalingMinSize | No | 1 | integer | Minimum number of BIG-IP instances you want available in the Auto Scale Group. |
@@ -141,6 +143,7 @@ Note: These are specified in the configuration file. See sample_autoscale.yaml
 | environment | No | f5env | string | Environment label. |
 | group | No | f5group | string | Group Tag. |
 | owner | No | f5owner | string | Owner label. |
+| logId | No | f5-waf-logs | string | Enter the name of the Google Cloud log that will receive WAF events. |
 | provisionPublicIp | No | true | boolean | Provision Public IP addresses for the BIG-IP Management interface. By default, this is set to true. If set to false, the solution will deploy a bastion host instead in order to provide access.  |
 | region | No | us-west1 | string | Google Cloud region used for this deployment, for example 'us-west1'. |
 | restrictedSrcAddressApp | Yes | | array | An IP address range (CIDR) that can be used to restrict access web traffic (80/443) to the BIG-IP instances, for example 'X.X.X.X/32' for a host, '0.0.0.0/0' for the Internet, etc. **NOTE**: The VPC CIDR is automatically added for internal use. |
@@ -205,61 +208,91 @@ You will most likely want or need to change the BIG-IP configuration. This gener
 Example from sample_autoscale.yaml
 ```yaml
     ### (OPTIONAL) Supply a URL to the bigip-runtime-init configuration file in YAML or JSON format
-    bigIpRuntimeInitConfig: https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.1.0.0//examples/autoscale/bigip-configurations/runtime-init-conf-bigiq.yaml
+    bigIpRuntimeInitConfig: https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.4.0.0//examples/autoscale/bigip-configurations/runtime-init-conf-bigiq-with-app.yaml
 ```
 
 ***IMPORTANT**: Note the "raw.githubusercontent.com". Any URLs pointing to GitHub **must** use the raw file format.*
 
 F5 has provided the following example configuration files in the `examples/autoscale/bigip-configurations` folder:
 
-- `runtime-init-conf-bigiq.yaml` - This configuration file installs packages and creates WAF-protected services for a BIG-IQ licensed deployment based on the Automation Toolchain declaration URLs listed above.
-- `runtime-init-conf-payg.yaml` - This inline configuration file installs packages and creates WAF-protected services for a PAYG licensed deployment.
+- `runtime-init-conf-bigiq-with-app.yaml` - This configuration file installs packages and creates WAF-protected services for a BIG-IQ licensed deployment based on the Automation Toolchain declaration URLs listed above.
+- `runtime-init-conf-payg-with-app.yaml` - This inline configuration file installs packages and creates WAF-protected services for a PAYG licensed deployment.
 - `Rapid_Deployment_Policy_13_1.xml` - This ASM security policy is supported for BIG-IP 13.1 and later.
 
 See [F5 BIG-IP Runtime Init](https://github.com/F5Networks/f5-bigip-runtime-init) for more examples. 
  
-By default, this solution deploys the `runtime-init-conf-bigiq.yaml` configuration. 
+**IMPORTANT**: 
+By default, this solution references the `runtime-init-conf-bigiq-with-app.yaml` example BIG-IP config file.
+  - The **Full Stack** (autoscale.py) always **requires** customizing this file with your BIG-IQ Licensing configuration.
+  - The **Existing Network Stack** (autoscale-existing-network.py) always **requires** customizing this file (with your BIG-IQ Licensing **AND** Virtual Service configuration pointing at your own application) and republishing before deploying
 
-This example configuration does not require any modifications to deploy successfully *(Disclaimer: "Successfully" implies the template deploys without errors and deploys BIG-IP WAFs capable of passing traffic. To be fully functional as designed, you would need to have satisfied the [Prerequisites](#prerequisites))*. However, in production, these files would commonly be customized. Some examples of small customizations or modifications are provided below. 
 
-The example AS3 declaration in this config uses [Service Discovery](https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/userguide/service-discovery.html#using-service-discovery-with-as3) to populate the pool with the private IP addresses of application servers in a instance group. By default, the fields for the service discovery configuration are rendered similarly from Google Cloud metadata. If the application instance group requires different values or configuration, you would need to customize them in the runtime-init config being downloaded. 
+**Example Customization 1:**
 
-To change the Pool configuration:
+To change the BIG-IQ Licensing configuration:
 
-  1. Edit/modify the AS3 Declaration (AS3) declaration in a corresponding runtime-init config file with the new `Pool` values. 
+  1. Edit/modify the Declarative Onboarding (DO) declaration in the runtime-init config file [runtime-init-conf-bigiq-with-app.yaml](../bigip-configurations/runtime-init-conf-bigiq-with-app.yaml) with the new `License` values. 
 
-Example:
-```yaml
-           Shared_Pool:
-              class: Pool
-              remark: Service 1 shared pool
-              members:
-                - addressDiscovery: gce
-                  addressRealm: private
-                  tagKey: <YOUR_TAG_KEY>
-                  tagValue: <YOUR_TAG_VALUE>
-                  region: '{{{REGION}}}'
-                  servicePort: 80
-                  updateInterval: 60
-              monitors:
-                - http
-```
+  Example:
+  ```yaml
+            My_License:
+              class: License
+              hypervisor: gce
+              licenseType: <YOUR_LICENSE_TYPE>
+              licensePool: <YOUR_LICENSE_POOL>
+              bigIqHost: <YOUR_BIG_IQ_HOST>
+              bigIqUsername: <YOUR_BIG_IQ_USERNAME>
+              bigIqPassword: '{{{BIGIQ_PASSWORD}}}'
+              tenant: <YOUR_TENANT>
+              skuKeyword1: <YOUR_SKU_KEYWORD>
+              unitOfMeasure: <YOUR_UNIT_OF_MEASURE>
+              reachable: false
+              overwrite: false
+  ```
+  3. Publish/host the customized runtime-init config file at a location reachable by the BIG-IP at deploy time (for example, GitHub, Google Cloud Storage, etc.) or render/format to send as inline json.
+  4. Update the **bigIpRuntimeInitConfig** input parameter to reference the new URL or inline JSON of the updated configuration.
+  6. Deploy or Re-Deploy the template.
 
-  - *NOTE:* 
-    - The managed identity assigned to the BIG-IP VE instance(s) must have read permissions on the managed instance group resource.
-    - The Service Discovery configuration listed above targets a specific managed instance group ID to reduce the number of requests made to the Google Cloud API endpoints. When choosing capacity for the BIG-IP VE and application instance group, it is possible to exceed the API request limits. Consult the Google Compute Engine API rate limits [documentation](https://cloud.google.com/compute/docs/api-rate-limits) for more information.
+**Example Customization 2:**
 
-  - You can also use another pool configuration entirely. For example, using the [FQDN](https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/declarations/discovery.html#using-an-fqdn-pool-to-identify-pool-members) Service Discovery instead to point to a DNS name.
+To change the Virtual Service configuration:
 
-```yaml
-              class: Pool
-              remark: Service 1 shared pool
-              members:
-              - addressDiscovery: fqdn
-                autoPopulate: true
-                hostname: <WWW.YOURSITE.COM>
-                servicePort: 80
-```
+  1. Edit/modify the Application Services 3 (AS3) declaration in the example runtime-init config file ` [runtime-init-conf-payg-with-app.yaml](../bigip-configurations/runtime-init-conf-payg-with-app.yaml) to point at your own application.  See AS3 [documentation](https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/userguide/composing-a-declaration.html) for more details and examples.
+
+      Example: At a minimum, update the Pool class:
+      ```yaml
+                Shared_Pool:
+                    class: Pool
+                    remark: Service 1 shared pool
+                    members:
+                      - addressDiscovery: gce
+                        addressRealm: private
+                        tagKey: <YOUR_TAG_KEY>
+                        tagValue: <YOUR_TAG_VALUE>
+                        region: '{{{REGION}}}'
+                        servicePort: 80
+                        updateInterval: 60
+                    monitors:
+                      - http
+      ```
+
+      *NOTE:* 
+      - The example AS3 declaration in this config uses [Service Discovery](https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/userguide/service-discovery.html#using-service-discovery-with-as3) to populate the pool with the private IP addresses of application servers in a instance group. By default, the fields for the service discovery configuration are rendered similarly from Google Cloud metadata. If the application instance group requires different values or configuration, you would need to customize them in the runtime-init config being downloaded.  
+      - The managed identity assigned to the BIG-IP VE instance(s) must have read permissions on the managed instance group resource.
+      - The Service Discovery configuration listed above targets a specific managed instance group ID to reduce the number of requests made to the Google Cloud API endpoints. When choosing capacity for the BIG-IP VE and application instance group, it is possible to exceed the API request limits. Consult the Google Compute Engine API rate limits [documentation](https://cloud.google.com/compute/docs/api-rate-limits) for more information.
+
+  - Or even with another pool configuration entirely. For example, using the [FQDN](https://clouddocs.f5.com/products/extensions/f5-appsvcs-extension/latest/declarations/discovery.html#using-an-fqdn-pool-to-identify-pool-members) Service Discovery instead to point to a DNS name.
+
+    Example:
+    ```yaml
+                  class: Pool
+                  remark: Service 1 shared pool
+                  members:
+                  - addressDiscovery: fqdn
+                    autoPopulate: true
+                    hostname: <WWW.YOURSITE.COM>
+                    servicePort: 80
+    ```
 
   2. Publish/host the customized runtime-init config file at a location reachable by the BIG-IP at deploy time (for example, GitHub, Google Cloud Storage, etc.).
   3. Update the **bigIpRuntimeInitConfig** input parameter to reference the new URL of the updated configuration.
@@ -312,7 +345,7 @@ To test the WAF service, perform the following steps:
 ### Viewing WAF Logs
 
 - This solution utilizes [F5 Telemetry Streaming extension](https://clouddocs.f5.com/products/extensions/f5-telemetry-streaming/latest/) which sends WAF logs to the Google Cloud Logging service.
-- You can view the WAF logs by going to the [Google Cloud Logging Console](https://console.cloud.google.com/logs) and querying for the value used for logId in the F5 BIG-IP Runtime Init My_Remote_Logs_Namespace configuration. The default value is ***f5-waf-logs***.
+- You can view the WAF logs by going to the [Google Cloud Logging Console](https://console.cloud.google.com/logs) and querying for the value used for the logId input parameter. The default value is ***f5-waf-logs***.
 
 ### Accessing the BIG-IP
 
@@ -464,11 +497,11 @@ By default, Rolling Upgrades are configured to upgrade in batches of 20% with ze
 1. Modify the **bigIpRuntimeInitConfig** parameter value to reference a new URL to trigger a model update. Example:
   - If using tags for versions, change from `v1.2.0.0`
     ```yaml
-        "bigIpRuntimeInitConfig": "https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v1.2.0.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq.yaml"
+        "bigIpRuntimeInitConfig": "https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v1.2.0.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq-with-app.yaml"
     ```
     to `v1.3.1.0`
     ```yaml
-        "bigIpRuntimeInitConfig": "https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v1.3.1.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq.yaml"
+        "bigIpRuntimeInitConfig": "https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v1.3.1.0/examples/autoscale/bigip-configurations/runtime-init-conf-bigiq-with-app.yaml"
 
     ```
 2. Modify the **update** parameter to True. This removes dependencies that are required for the initial deployment only.
@@ -631,11 +664,10 @@ List of endpoints BIG-IP may contact during onboarding:
 
 These templates have only been explicitly tested and validated with the following versions of BIG-IP.
 
-
-| Google Cloud BIG-IP Image Version | BIG-IP Version |
-| --- | --- |
-| 16.1.200000 | 16.1.2.1 Build 0.0.10 |
-| 14.1.400000 | 14.1.4.4 Build 0.0.4* |
+| Google BIG-IP Image Version | BIG-IP Version         |
+| --------------------------- | ---------------------- |
+| 16.1.202000                 | 16.1.2.2 Build 0.0.28  |
+| 14.1.406000                 | 14.1.4.6 Build 0.0.8   |
 
 These templates leverage Runtime-Init, which requires BIG-IP Versions 14.1.2.6 and up, and are assumed compatible to work. 
 
