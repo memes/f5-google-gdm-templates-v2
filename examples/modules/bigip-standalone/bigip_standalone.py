@@ -1,6 +1,6 @@
 # Copyright 2021 F5 Networks All rights reserved.
 #
-# Version 2.1.0.0
+# Version 2.6.0.0
 
 """Creates BIGIP Instance"""
 COMPUTE_URL_BASE = 'https://www.googleapis.com/compute/v1/'
@@ -29,7 +29,6 @@ def populate_properties(context, required_properties, optional_properties):
     )
     return properties
 
-
 def create_storage_bucket(context, storage_bucket):
     """ Create storage bucket. """
     # Build instance property lists
@@ -52,10 +51,11 @@ def create_storage_bucket(context, storage_bucket):
         'versioning',
         'website'
     ]
-    name = storage_bucket.get('name') or \
-        context.env['name'] if 'name' in storage_bucket or 'name' in context.env else 'cfe-storage'
     prefix = context.properties['uniqueString']
-    storage_name = generate_name(prefix, name)
+    storage_name = storage_bucket.get('name') or \
+        context.env['name'] if 'name' in storage_bucket or \
+            'name' in context.env else \
+                generate_name(prefix, 'cfe-storage')
     properties = {}
     properties.update({
             'project': context.env['project'],
@@ -71,7 +71,6 @@ def create_storage_bucket(context, storage_bucket):
         'properties': properties
     }
     return storage
-
 
 def create_instance(context):
     """ Create standalone instance """
@@ -102,6 +101,8 @@ def create_instance(context):
     name = context.properties.get('name') or \
         context.env['name']
     instance_name = generate_name(context.properties['uniqueString'], name)
+    source_image = ''.join([COMPUTE_URL_BASE, 'projects/', context.properties['customImageId'],]) if context.properties['customImageId'] else \
+        ''.join([COMPUTE_URL_BASE, 'projects/f5-7626-networks-public/global/images/', context.properties['imageName'],])
     properties = {}
     # Setup Defaults - property updated to given value when property exists in config
     properties.update({
@@ -113,16 +114,15 @@ def create_instance(context):
                 'boot': True,
                 'autoDelete': True,
                 'initializeParams': {
-                    'sourceImage': ''.join([COMPUTE_URL_BASE, 'projects/',
-                    'f5-7626-networks-public/global/images/', context.properties['imageName'],
-                    ])
+                    'sourceImage': source_image
                 }
             }],
-            'hostname': ''.join([instance_name,
-            '.c.', context.env['project'], '.internal']),
-            'machineType': ''.join([COMPUTE_URL_BASE, 'projects/', context.env['project'],
-            '/zones/', context.properties['zone'], '/machineTypes/',
-            context.properties['instanceType']]),
+            'hostname': ''.join([instance_name, '.c.',
+                context.env['project'], '.internal']),
+            'machineType': ''.join([COMPUTE_URL_BASE, 'projects/',
+                context.env['project'], '/zones/',
+                context.properties['zone'], '/machineTypes/',
+                context.properties['instanceType']]),
             'metadata': metadata(context),
             'name': instance_name,
             'networkInterfaces': create_nics(context)
@@ -185,15 +185,13 @@ def create_nics(context):
 def metadata(context):
     """ Create metadata for instance """
     multi_nic = len(context.properties.get('networkInterfaces', [])) > 1
+    secret_id = str(context.properties['secretId']) if \
+        'secretId' in context.properties else ''
+    license_key = str(context.properties['licenseKey']) if \
+        'licenseKey' in context.properties else ''
+    telemetry_flag = '' if context.properties['allowUsageAnalytics'] else '--skip-telemetry'
     metadata_config = {
-                'items': [{
-                    'key': 'unique-string',
-                    'value': str(context.properties['uniqueString'])
-                },
-                {
-                    'key': 'region',
-                    'value': str(context.properties['region'])
-                },
+                'items': [
                 {
                     'key': 'startup-script',
                     'value': ('\n'.join(['#!/bin/bash',
@@ -266,9 +264,23 @@ def metadata(context):
                                     '       tmsh modify sys global-settings remote-host add { metadata.google.internal { hostname metadata.google.internal addr 169.254.169.254 } }',
                                     '       tmsh save /sys config',
                                     '   fi',
+                                    '',
+                                    '   # VARS FROM TEMPLATE',
+                                    '   PACKAGE_URL=' + str(context.properties['bigIpRuntimeInitPackageUrl']),
+                                    '',
                                     '   RUNTIME_CONFIG=' + str(context.properties['bigIpRuntimeInitConfig']),
+                                    '',
+                                    '   SECRET_ID=' + secret_id,
+                                    '',
+                                    '   LICENSE_KEY=' + license_key,
+                                    '',
+                                    '   TELEMETRY_FLAG=' + telemetry_flag,
+                                    '',
+                                    '   echo $SECRET_ID > /config/cloud/secret_id',
+                                    '   echo $LICENSE_KEY > /config/cloud/license_key',
+                                    '',
                                     '   for i in {1..30}; do',
-                                    '       /usr/bin/curl -fv --retry 1 --connect-timeout 5 -L ' + str(context.properties['bigIpRuntimeInitPackageUrl']) + ' -o "/var/config/rest/downloads/f5-bigip-runtime-init.gz.run" && break || sleep 10',
+                                    '       /usr/bin/curl -fv --retry 1 --connect-timeout 5 -L "${PACKAGE_URL}" -o "/var/config/rest/downloads/f5-bigip-runtime-init.gz.run" && break || sleep 10',
                                     '   done',
                                     '   if [[ ${RUNTIME_CONFIG} =~ ^http.* ]]; then',
                                     '       for i in {1..30}; do',
@@ -278,9 +290,9 @@ def metadata(context):
                                     '       /usr/bin/printf \'%s\\n\' "${RUNTIME_CONFIG}" | jq .  > /config/cloud/runtime-init-conf.yaml',
                                     '   fi',
                                     '   # install and run f5-bigip-runtime-init',
-                                    '   bash /var/config/rest/downloads/f5-bigip-runtime-init.gz.run -- \'--cloud gcp --telemetry-params templateName:v2.1.0.0/examples/modules/bigip-standalone/bigip_standalone.py\'',
+                                    '   bash /var/config/rest/downloads/f5-bigip-runtime-init.gz.run -- \'--cloud gcp --telemetry-params templateName:v2.6.0.0/examples/modules/bigip-standalone/bigip_standalone.py\'',
                                     '   /usr/bin/cat /config/cloud/runtime-init-conf.yaml',
-                                    '   /usr/local/bin/f5-bigip-runtime-init --config-file /config/cloud/runtime-init-conf.yaml',
+                                    '   /usr/local/bin/f5-bigip-runtime-init --config-file /config/cloud/runtime-init-conf.yaml ${TELEMETRY_FLAG}',
                                     '   /usr/bin/touch /config/startup_finished',
                                     'EOF',
                                     '   /usr/bin/chmod +x /config/nic-swap.sh',
@@ -298,15 +310,31 @@ def metadata(context):
                                     'fi'
                                     ])
                     )
+                },
+                {
+                    'key': 'hostname',
+                    'value': str(context.properties['hostname'])
+                },
+                {
+                    'key': 'region',
+                    'value': str(context.properties['region'])
+                },
+                {
+                    'key': 'unique-string',
+                    'value': str(context.properties['uniqueString'])
                 }]
     }
-    if 'bigIpPeerAddr' in context.properties and context.properties['bigIpPeerAddr'] is not None:
-        metadata_config['items'].append(
+
+    if 'additionalMetadataTags' in context.properties and context.properties['additionalMetadataTags'] is not None:
+
+        for k,v in context.properties['additionalMetadataTags'].items():
+            metadata_config['items'].append(
             {
-                'key': 'bigip-peer-addr',
-                'value': str(context.properties['bigIpPeerAddr'])
+                'key': k,
+                'value': v
             }
         )
+
     return metadata_config
 
 def create_target_instance(context, target_instance, instance_name):

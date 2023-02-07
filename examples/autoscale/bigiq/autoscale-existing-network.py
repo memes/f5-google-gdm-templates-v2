@@ -1,6 +1,6 @@
 # Copyright 2021 F5 Networks All rights reserved.
 #
-# Version 2.1.0.0
+# Version 2.6.0.0
 
 # pylint: disable=W,C,R
 
@@ -37,18 +37,34 @@ def create_bigip_deployment(context):
     sub_ref = COMPUTE_URL_BASE + 'projects/' + context.env['project'] + \
           '/regions/' + context.properties['region'] + \
           '/subnetworks/' + subnet_name
+    allow_usage_analytics = context.properties['allowUsageAnalytics'] if \
+        'allowUsageAnalytics' in context.properties else True
+    custom_image_id = context.properties['bigIpCustomImageId'] if \
+        'bigIpCustomImageId' in context.properties else ''
+    secret_id = context.properties['bigIpSecretId'] if \
+        'bigIpSecretId' in context.properties else ''
+    service_account_email = context.properties['bigIpServiceAccountEmail'] if \
+        'bigIpServiceAccountEmail' in context.properties else \
+            context.properties['uniqueString'] + \
+                '-admin@' + \
+                    context.env['project'] + \
+                        '.iam.gserviceaccount.com'
+    zones = []
+    for zone in context.properties['zones']:
+        zones = zones + [{'zone': 'zones/' + zone}]
     depends_on_array = []
     deployment = {
-        'name': 'bigip',
+        'name': 'bigip-autoscale',
         'type': '../../modules/bigip-autoscale/bigip_autoscale.py',
         'properties': {
+          'allowUsageAnalytics': allow_usage_analytics,
           'application': context.properties['application'],
-          'availabilityZone': context.properties['zone'],
           'bigIpRuntimeInitConfig': context.properties['bigIpRuntimeInitConfig'],
           'bigIpRuntimeInitPackageUrl': context.properties['bigIpRuntimeInitPackageUrl'],
+          'bigIqSecretId': context.properties['bigIqSecretId'],
           'autoscalers': [{
               'name': 'bigip',
-              'zone': context.properties['zone'],
+              'zone': context.properties['zones'][0],
               'autoscalingPolicy': {
                 'minNumReplicas': context.properties['bigIpScalingMinSize'],
                 'maxNumReplicas': context.properties['bigIpScalingMaxSize'],
@@ -67,6 +83,7 @@ def create_bigip_deployment(context):
               }
           }],
           'cost': context.properties['cost'],
+          'customImageId': custom_image_id,
           'environment': context.properties['environment'],
           'group': context.properties['group'],
           'healthChecks': [
@@ -82,23 +99,25 @@ def create_bigip_deployment(context):
           ],
           'imageName': context.properties['bigIpImageName'],
           'instanceGroupManagers': [{
-              'name': 'bigip',
-              'zone': context.properties['zone']
+            'name': 'bigip',
+            'distributionPolicy': {
+                'targetShape': 'EVEN',
+                'zones': zones
+            }
           }],
           'instanceTemplates': [{
               'name': 'bigip'
           }],
           'instanceTemplateVersion': context.properties['bigIpInstanceTemplateVersion'],
           'instanceType': context.properties['bigIpInstanceType'],
+          'logId': context.properties['logId'],
           'networkSelfLink': net_ref,
           'owner': context.properties['owner'],
           'project': context.env['project'],
           'provisionPublicIp': context.properties['provisionPublicIp'],
           'region': context.properties['region'],
-          'serviceAccountEmail': context.properties['uniqueString'] + \
-              '-admin@' + \
-                  context.env['project'] + \
-                      '.iam.gserviceaccount.com',
+          'secretId': secret_id,
+          'serviceAccountEmail': service_account_email,
           'subnetSelfLink': sub_ref,
           'targetPools': [{
               'name': 'bigip',
@@ -153,7 +172,7 @@ def create_dag_deployment(context):
         ],
         'forwardingRules': [
             {
-                'name': context.properties['uniqueString'] + '-fwrule1',
+                'name': context.properties['uniqueString'] + '-fr-01',
                 'region': context.properties['region'],
                 'IPProtocol': 'TCP',
                 'target': '$(ref.' + target_pool_name + '.selfLink)',
@@ -169,7 +188,7 @@ def create_dag_deployment(context):
                 ],
                 'description': 'Backend service used for internal LB',
                 'healthChecks': [
-                    '$(ref.' + context.properties['uniqueString'] + '-tcp-healthcheck.selfLink)'
+                    '$(ref.' + context.properties['uniqueString'] + '-tcp-hc.selfLink)'
                 ],
                 'loadBalancingScheme': 'INTERNAL',
                 'name': context.properties['uniqueString'] + '-bes',
@@ -183,7 +202,7 @@ def create_dag_deployment(context):
             {
                 'checkIntervalSec': 5,
                 'description': 'my tcp healthcheck',
-                'name': context.properties['uniqueString'] + '-tcp-healthcheck',
+                'name': context.properties['uniqueString'] + '-tcp-hc',
                 'tcpHealthCheck': {
                     'port': 44000
                 },
@@ -193,7 +212,7 @@ def create_dag_deployment(context):
             {
                 'checkIntervalSec': 5,
                 'description': 'my http healthcheck',
-                'name': context.properties['uniqueString'] + '-http-healthcheck',
+                'name': context.properties['uniqueString'] + '-http-hc',
                 'httpHealthCheck': {
                     'port': 80
                 },
@@ -203,7 +222,7 @@ def create_dag_deployment(context):
             {
                 'checkIntervalSec': 5,
                 'description': 'my https healthcheck',
-                'name': context.properties['uniqueString'] + '-https-healthcheck',
+                'name': context.properties['uniqueString'] + '-https-hc',
                 'httpsHealthCheck': {
                     'port': 443
                 },
@@ -276,7 +295,7 @@ def create_function_deployment(context):
             'environmentVariables': {
               'bigIpRuntimeInitConfig': context.properties['bigIpRuntimeInitConfig'],
               'bigipInstanceGroup': instance_group_name,
-              'zone': context.properties['zone']
+              'zone': context.properties['zones'][0]
             },
             'labels': {
                 'delete': 'true'
@@ -300,13 +319,15 @@ def generate_config(context):
 
     deployment_name = generate_name(prefix, name)
     bigip_igm_name = generate_name(prefix, 'bigip-igm')
-    fw_rule_name = generate_name(prefix, 'fwrule1')
+    fr_name = generate_name(prefix, 'fr-01')
 
-    resources = [create_access_deployment(context)] + \
-                [create_bigip_deployment(context)] + \
+    resources = [create_bigip_deployment(context)] + \
                 [create_dag_deployment(context)] + \
                 [create_function_deployment(context)]
     outputs = []
+
+    if not 'bigIpServiceAccountEmail' in context.properties:
+        resources = resources + [create_access_deployment(context)]
 
     outputs = outputs + [
         {
@@ -323,15 +344,15 @@ def generate_config(context):
         },
         {
             'name': 'wafExternalHttpUrl',
-            'value': 'http://' + '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': 'http://' + '$(ref.' + fr_name + '.IPAddress)'
         },
         {
             'name': 'wafExternalHttpsUrl',
-            'value': 'https://' + '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': 'https://' + '$(ref.' + fr_name + '.IPAddress)'
         },
         {
             'name': 'wafPublicIp',
-            'value': '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': '$(ref.' + fr_name + '.IPAddress)'
         }
     ]
 

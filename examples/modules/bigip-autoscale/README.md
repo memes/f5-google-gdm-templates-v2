@@ -38,11 +38,14 @@ This Google Deployment Manager template creates an autoscale group of BIG-IP ins
 
 | Parameter | Required | Default | Type |  Description |
 | --- | --- | --- | --- | --- |
+| allowUsageAnalytics | No | true | boolean | This deployment can send anonymous statistics to F5 to help us determine how to improve our solutions. If you select **false** statistics are not sent. |
 | application | No | f5app | string |Application label. |
 | autoscalers | Yes |  | array | List of declaration of settings used for provisioning autoscalers. More information around REST APIs is on [Google Cloud Documentation](https://cloud.google.com/compute/docs/reference/rest/v1/autoscalers). |
 | bigIpRuntimeInitPackageUrl | Yes |  | string | URL for BIG-IP Runtime Init package. | 
 | bigIpRuntimeInitConfig | Yes |  | string | Supply a URL to the bigip-runtime-init configuration file in YAML or JSON format, or an escaped JSON string to use for f5-bigip-runtime-init configuration. |
+| bigIqSecretId | No |  | string | Supply the of the Google secret manager secret containing the password for BIG-IQ used during BIG-IP licensing via BIG-IQ. |
 | cost | No | f5cost | string | Cost Center label. |
+| customImageId | No |  | string | Identifier of a custom image, starting with the project name, used to create the BIG-IP instance(s). Example value: `myProjectName/global/images/myImageName`. You can find the names of F5 marketplace images by running the command: `gcloud compute images list --project myProjectName --filter="name~myImageName"`. |
 | environment | No | f5env | string | Environment label. | 
 | group | No | f5group | string | Group label. |
 | healthChecks | Yes |  | array | List of declaration of settings used for provisioning HealthChecks which defines health checks used by other cloud resources. More information around REST APIs is on [Google Cloud Documentation](https://cloud.google.com/compute/docs/reference/rest/v1/healthChecks). |
@@ -50,9 +53,11 @@ This Google Deployment Manager template creates an autoscale group of BIG-IP ins
 | instanceTemplateVersion | No | 1 |  | Version of the instance template to create. When updating deployment properties of the BIG-IP instances, you must provide a unique value for this parameter. |
 | instanceType | Yes |  | string | Instance type assigned to the application. For example: `n1-standard-1`. | 
 | instanceTemplates | Yes |  | array | Required when provisioning autoscale group. List of declaration of settings used for provisioning instanceTemplates. More information around REST APIs is on [Google Cloud Documentation](https://cloud.google.com/compute/docs/reference/rest/v1/instanceTemplates). |
+| logId | No | f5-waf-logs | string | Enter the name of the Google Cloud log that will receive WAF events. This parameter is required if your bigipRuntimInitConfig contains a telemetry services configuration for Google Cloud logging. |
 | networkSelfLink | Yes |  | string | Self Link of the network to use to deploy the application.  | 
 | owner | No | f5owner | string | Owner label. |
 | provisionPublicIp | No | true | boolean | Select true if you would like to provision a public IP address for accessing the BIG-IP instance(s). |
+| secretId | No |  | string | Supply the of the Google secret manager secret to create READ permissions for. For example, if customizing your runtime-init config with an admin password, logging credential, etc. |
 | serviceAccountEmail | Yes |  | string | Enter the Google service account to use for autoscale API calls. For example: `username@projectname.iam.serviceaccount.com`. |
 | subnetSelfLink | Yes |  | string | Self Link of the subnetwork to use to deploy the application. | 
 | targetPools | Yes |  | array | List of settings for provisioning target pools. More information around REST APIs is on [Google Cloud Documentation](https://cloud.google.com/compute/docs/reference/rest/v1/targetPools). |

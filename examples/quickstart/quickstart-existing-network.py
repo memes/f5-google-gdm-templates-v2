@@ -1,6 +1,6 @@
 # Copyright 2021 F5 Networks All rights reserved.
 #
-# Version 2.1.0.0
+# Version 2.6.0.0
 
 
 """Creates full stack for POC"""
@@ -18,13 +18,15 @@ def create_bigip_deployment(context):
     prefix = context.properties['uniqueString']
     for nics in range(context.properties['numNics']):
         access_config = {}
+        # Multi-NIC first interface
         if context.properties['numNics'] != 1 and nics == 0:
             net_name = context.properties['networks']['externalNetworkName']
-            subnet_name = context.properties['subnets']['appSubnetName']
+            subnet_name = context.properties['subnets']['externalSubnetName']
             interface_description = 'Interface used for external traffic'
             access_config = {
                 'accessConfigs': [{ 'name': 'External NAT', 'type': 'ONE_TO_ONE_NAT' }]
             }
+        # Single NIC
         elif nics == 0:
             net_name = context.properties['networks']['mgmtNetworkName']
             subnet_name = context.properties['subnets']['mgmtSubnetName']
@@ -35,6 +37,7 @@ def create_bigip_deployment(context):
                 }
             else:
                 access_config = {'accessConfigs': []}
+        # Multi-NIC second interface
         elif nics == 1:
             net_name = context.properties['networks']['mgmtNetworkName']
             subnet_name = context.properties['subnets']['mgmtSubnetName']
@@ -45,6 +48,7 @@ def create_bigip_deployment(context):
                 }
             else:
                 access_config = {'accessConfigs': []}
+        # Multi-NIC third interface
         else:
             net_name = context.properties['networks']['internalNetworkName']
             subnet_name = context.properties['subnets']['internalSubnetName']
@@ -63,15 +67,38 @@ def create_bigip_deployment(context):
         depends_on_array.append(net_name)
         depends_on_array.append(subnet_name)
         interface_config_array.append(interface_config)
+
+    # Populate Metadata Tags
+    additionalMetadataTags = {}
+
+    # Populate Example VIPs
+    public_ip_name = generate_name(prefix, 'public-ip-01')
+    depends_on_array.append(public_ip_name)
+    additionalMetadataTags.update({'service-address-01-public-ip': '$(ref.' + public_ip_name + '.address)'})
+
+    allow_usage_analytics = context.properties['allowUsageAnalytics'] if \
+        'allowUsageAnalytics' in context.properties else True
+    custom_image_id = context.properties['bigIpCustomImageId'] if \
+        'bigIpCustomImageId' in context.properties else ''
+    hostname = context.properties['bigIpHostname'] if \
+        'bigIpHostname' in context.properties else 'bigip01.local'
+    license_key = context.properties['bigIpLicenseKey'] if \
+        'bigIpLicenseKey' in context.properties else ''
+
     bigip_config = [{
-        'name': 'bigip-standalone',
+        'name': 'bigip-quickstart',
         'type': '../modules/bigip-standalone/bigip_standalone.py',
         'properties': {
+            'additionalMetadataTags': additionalMetadataTags,
+            'allowUsageAnalytics': allow_usage_analytics,
             'bigIpRuntimeInitConfig': context.properties['bigIpRuntimeInitConfig'],
             'bigIpRuntimeInitPackageUrl': context.properties['bigIpRuntimeInitPackageUrl'],
+            'customImageId': custom_image_id,
+            'hostname': hostname,
             'imageName': context.properties['bigIpImageName'],
             'instanceType': context.properties['bigIpInstanceType'],
-            'name': 'bigip1',
+            'licenseKey': license_key,
+            'name': 'bigip-vm-01',
             'networkInterfaces': interface_config_array,
             'region': context.properties['region'],
             'tags': {
@@ -83,7 +110,7 @@ def create_bigip_deployment(context):
                 ]
             },
             'targetInstances': [{
-                'name': 'bigip'
+                'name': 'bigip-vm-01'
             }],
             'uniqueString': context.properties['uniqueString'],
             'zone': context.properties['zone']
@@ -92,14 +119,25 @@ def create_bigip_deployment(context):
             'dependsOn': depends_on_array
         }
     }]
+
+    if 'bigIpServiceAccountEmail' in context.properties:
+        bigip_config[0]['properties']['serviceAccounts'] = [
+            {
+                'email': context.properties['bigIpServiceAccountEmail'],
+                'scopes': [
+                    'https://www.googleapis.com/auth/compute',\
+                    'https://www.googleapis.com/auth/devstorage.read_write',\
+                    'https://www.googleapis.com/auth/cloud-platform'
+                ]
+            }
+        ]
+
     return bigip_config
 
 def create_dag_deployment(context):
     """ Create dag module deployment """
     prefix = context.properties['uniqueString']
     mgmt_net_name = context.properties['networks']['mgmtNetworkName']
-    ext_net_name = context.properties['networks']['externalNetworkName']
-    int_net_name = context.properties['networks']['internalNetworkName']
     if context.properties['numNics'] == 1:
         ext_net_name = context.properties['networks']['mgmtNetworkName']
         int_net_name = context.properties['networks']['mgmtNetworkName']
@@ -116,17 +154,17 @@ def create_dag_deployment(context):
     internal_net_ref = COMPUTE_URL_BASE + 'projects/' + \
                        context.env['project'] + '/global/networks/' + int_net_name
     int_net_cidr = '10.0.' + str(context.properties['numNics'] - 1) + '.0/24'
+    mgmt_port = 8443
     depends_on_array = []
     depends_on_array.append(mgmt_net_name)
-    mgmt_port = 8443
     if context.properties['numNics'] > 1:
         depends_on_array.append(ext_net_name)
         mgmt_port = 443
     if context.properties['numNics'] > 2:
         depends_on_array.append(int_net_name)
-    if context.properties['numNics'] > 3:
-        depends_on_array.append(ext_net_name)
-    target_instance_name = generate_name(prefix, 'bigip-ti')
+    target_instance_name = generate_name(prefix, 'bigip-vm-01-ti')
+    public_ip_name = generate_name(prefix, 'public-ip-01')
+
     depends_on_array.append(target_instance_name)
     dag_configuration = [{
       'name': 'dag',
@@ -176,10 +214,17 @@ def create_dag_deployment(context):
                     'targetTags': [ generate_name(prefix, 'app-vip-fw') ]
                 }
             ],
+            'computeAddresses': [
+                {
+                  'name': public_ip_name,
+                  'region': context.properties['region'],
+                }
+            ],
             'forwardingRules': [
                 {
-                    'name': context.properties['uniqueString'] + '-fwrule1',
+                    'name': context.properties['uniqueString'] + '-fr-01',
                     'region': context.properties['region'],
+                    'IPAddress': '$(ref.' + public_ip_name + '.selfLink)',
                     'IPProtocol': 'TCP',
                     'target': '$(ref.' + target_instance_name + '.selfLink)',
                     'loadBalancingScheme': 'EXTERNAL'
@@ -189,7 +234,7 @@ def create_dag_deployment(context):
                 {
                     'checkIntervalSec': 5,
                     'description': 'my tcp healthcheck',
-                    'name': context.properties['uniqueString'] + '-tcp-healthcheck',
+                    'name': context.properties['uniqueString'] + '-tcp-hc',
                     'tcpHealthCheck': {
                         'port': 44000
                     },
@@ -199,7 +244,7 @@ def create_dag_deployment(context):
                 {
                     'checkIntervalSec': 5,
                     'description': 'my http healthcheck',
-                    'name': context.properties['uniqueString'] + '-http-healthcheck',
+                    'name': context.properties['uniqueString'] + '-http-hc',
                     'httpHealthCheck': {
                         'port': 80
                     },
@@ -209,7 +254,7 @@ def create_dag_deployment(context):
                 {
                     'checkIntervalSec': 5,
                     'description': 'my https healthcheck',
-                    'name': context.properties['uniqueString'] + '-https-healthcheck',
+                    'name': context.properties['uniqueString'] + '-https-hc',
                     'httpsHealthCheck': {
                         'port': 443
                     },
@@ -233,8 +278,8 @@ def generate_config(context):
     prefix = context.properties['uniqueString']
 
     deployment_name = generate_name(context.properties['uniqueString'], name)
-    bigip_instance_name= generate_name(prefix, 'bigip1')
-    fw_rule_name = generate_name(prefix, 'fwrule1')
+    bigip_instance_name= generate_name(prefix, 'bigip-vm-01')
+    fr_name = generate_name(prefix, 'fr-01')
 
     resources = create_bigip_deployment(context) + create_dag_deployment(context)
     outputs = []
@@ -296,15 +341,15 @@ def generate_config(context):
         },
         {
             'name': 'vip1PublicIp',
-            'value': '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': '$(ref.' + fr_name + '.IPAddress)'
         },
         {
             'name': 'vip1PublicUrlHttp',
-            'value': 'http://' + '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': 'http://' + '$(ref.' + fr_name + '.IPAddress)'
         },
         {
             'name': 'vip1PublicUrlHttps',
-            'value': 'https://' + '$(ref.' + fw_rule_name + '.IPAddress)'
+            'value': 'https://' + '$(ref.' + fr_name + '.IPAddress)'
         }
     ]
 

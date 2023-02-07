@@ -1,6 +1,6 @@
 # Copyright 2021 F5 Networks All rights reserved.
 #
-# Version 2.1.0.0
+# Version 2.6.0.0
 
 # pylint: disable=W,C,R,duplicate-code,line-too-long
 
@@ -166,7 +166,7 @@ def create_instance_template(context, instance_templates):
     # Setup Variables
     prefix = context.properties['uniqueString']
     name = instance_templates.get('name') or context.env['name'] if 'name' in instance_templates or 'name' in context.env else 'demo'
-    instance_template_name = generate_name(prefix, name + '-v' + str(context.properties['instanceTemplateVersion']))
+    instance_template_name = generate_name(prefix, name + '-tmpl-v' + str(context.properties['instanceTemplateVersion']))
     application = context.properties['application'] if 'application' in context.properties else 'demo'
     cost = context.properties['cost'] if 'cost' in context.properties else 'demo'
     environment =  context.properties['environment'] if 'environment' in context.properties else 'demo'
@@ -224,12 +224,11 @@ def create_instance_template(context, instance_templates):
 def create_instance_group(context, instance_group_managers):
     """Create autoscale instance group."""
     # Build instance property lists
-    required_properties = ['zone']
+    required_properties = ['distributionPolicy']
     optional_properties = [
         'autoHealingPolicies',
         'baseInstanceName',
         'description',
-        'distributionPolicy',
         'instanceTemplate',
         'namedPorts',
         'statefulPolicy',
@@ -243,7 +242,7 @@ def create_instance_group(context, instance_group_managers):
     prefix = context.properties['uniqueString']
     name = instance_group_managers.get('name') or context.env['name'] if 'name' in instance_group_managers or 'name' in context.env else 'demo'
     base_instance_name = generate_name(prefix, name + '-vm')
-    instance_template_name = generate_name(prefix, name + '-v' + str(context.properties['instanceTemplateVersion']))
+    instance_template_name = generate_name(prefix, name + '-tmpl-v' + str(context.properties['instanceTemplateVersion']))
     instance_group_manager_name = generate_name(prefix, name + '-igm')
     properties = {}
 
@@ -253,16 +252,18 @@ def create_instance_group(context, instance_group_managers):
         'baseInstanceName': base_instance_name,
         'instanceTemplate': '$(ref.' + instance_template_name + '.selfLink)',
         'name': instance_group_manager_name,
+        'region': context.properties['region'],
         'targetSize': 2,
         'updatePolicy': {
-            'minimalAction': 'REPLACE',
-            'type': 'PROACTIVE'
+            'type': 'PROACTIVE',
+            'instanceRedistributionType': 'PROACTIVE',
+            'minimalAction': 'REPLACE'
         }
     })
     properties.update(populate_properties(instance_group_managers, required_properties, optional_properties))
     instance_group_manager_config = {
         'name': instance_group_manager_name,
-        'type': 'compute.beta.instanceGroupManager',
+        'type': 'compute.beta.regionInstanceGroupManager',
         'properties': properties
     }
     return instance_group_manager_config
@@ -295,12 +296,13 @@ def create_autoscaler(context, autoscalers):
             'coolDownPeriodSec': 60
         },
         'name': autoscaler_name,
+        'region': context.properties['region'],
         'target': '$(ref.' + instance_group_manager_name + '.selfLink)',
     })
     properties.update(populate_properties(autoscalers, required_properties, optional_properties))
     autoscaler_config = {
         'name': autoscaler_name,
-        'type': 'compute.v1.autoscalers',
+        'type': 'compute.v1.regionAutoscalers',
         'properties': properties
     }
     return autoscaler_config
