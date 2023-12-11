@@ -1,6 +1,6 @@
 # Copyright 2021 F5 Networks All rights reserved.
 #
-# Version 2.6.0.0
+# Version 2.9.0.0
 
 # pylint: disable=W,C,R,duplicate-code,line-too-long
 
@@ -68,7 +68,7 @@ def create_instance_template(context, instance_template):
         'bigIqSecretId' in context.properties else ''
     secret_id = str(context.properties['secretId']) if \
         'secretId' in context.properties else ''
-    source_image = ''.join([COMPUTE_URL_BASE, 'projects/', context.properties['customImageId'],]) if context.properties['customImageId'] else \
+    source_image = ''.join([COMPUTE_URL_BASE, 'projects/', context.properties['customImageId'],]) if 'customImageId' in context.properties and context.properties['customImageId'] else \
         ''.join([COMPUTE_URL_BASE, 'projects/f5-7626-networks-public/global/images/', context.properties['imageName'],])
     telemetry_flag = '' if context.properties['allowUsageAnalytics'] else '--skip-telemetry'
     properties = {}
@@ -120,8 +120,12 @@ def create_instance_template(context, instance_template):
                                     'exec 2>&1\n',
                                     'echo $(date +"%Y-%m-%dT%H:%M:%S.%3NZ") : Startup Script Start',
                                     '# Optional optimizations required as early as possible in boot sequence before MCDP starts up.',
-                                    '/usr/bin/setdb provision.extramb 1000',
-                                    '/usr/bin/setdb restjavad.useextramb true',
+                                    '/usr/bin/setdb provision.extramb 1000 || true',
+                                    '/usr/bin/setdb provision.restjavad.extramb 1384 || /usr/bin/setdb restjavad.useextramb true || true',
+                                    '/usr/bin/setdb iapplxrpm.timeout 300 || true',
+                                    '/usr/bin/setdb icrd.timeout 180 || true',
+                                    '/usr/bin/setdb restjavad.timeout 180 || true',
+                                    '/usr/bin/setdb restnoded.timeout 180 || true',
                                     '! grep -q \'provision asm\' /config/bigip_base.conf && echo \'sys provision asm { level nominal }\' >> /config/bigip_base.conf',
                                     '',
                                     '# VARS FROM TEMPLATE',
@@ -152,7 +156,7 @@ def create_instance_template(context, instance_template):
                                     'done',
                                     '',
                                     '# Run',
-                                    'bash "/var/config/rest/downloads/${PACKAGE_URL##*/}" -- \'--cloud gcp --telemetry-params templateName:v2.6.0.0/examples/modules/bigip-autoscale/bigip_autoscale.py\'',
+                                    'bash "/var/config/rest/downloads/${PACKAGE_URL##*/}" -- \'--cloud gcp --telemetry-params templateName:v2.9.0.0/examples/modules/bigip-autoscale/bigip_autoscale.py\'',
                                     '',
                                     '# Execute Runtime-init',
                                     'bash "/usr/local/bin/f5-bigip-runtime-init" --config-file /config/cloud/runtime-init.conf ${TELEMETRY_FLAG}',

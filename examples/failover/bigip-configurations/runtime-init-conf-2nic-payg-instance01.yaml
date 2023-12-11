@@ -20,8 +20,8 @@ extension_services:
         schemaVersion: 1.0.0
         class: Device
         async: true
-        label: FAILOVER 3NIC BIG-IP declaration for Declarative Onboarding with BYOL
-          license with example Application
+        label: Failover 2NIC BIG-IP declaration for Declarative Onboarding with PAYG
+          license
         Common:
           class: Tenant
           My_DbVariables:
@@ -49,10 +49,6 @@ extension_services:
             autoPhonehome: true
             class: System
             hostname: '{{{HOST_NAME}}}'
-          My_License:
-            class: License
-            licenseType: regKey
-            regKey: '{{{LICENSE_KEY}}}'
           admin:
             class: User
             userType: regular
@@ -102,80 +98,14 @@ extension_services:
           scopingTags:
             f5_cloud_failover_label: "{{{FAILOVER_TAG}}}"
           requireScopingTags: false
-    - extensionType: as3
-      type: inline
-      value:
-        class: ADC
-        schemaVersion: 3.0.0
-        label: Failover
-        remark: Failover
-        Tenant_1:
-          class: Tenant
-          Shared:
-            class: Application
-            template: shared
-            Shared_Pool:
-              class: Pool
-              remark: Service 1 shared pool
-              members:
-                - addressDiscovery: gce
-                  addressRealm: private
-                  tagKey: failovergroup
-                  tagValue: '{{{UNIQUE}}}'
-                  region: '{{{REGION}}}'
-                  servicePort: 80
-                  updateInterval: 60
-              monitors:
-                - http
-            Custom_HTTP_Profile:
-              class: HTTP_Profile
-              xForwardedFor: true
-            Custom_WAF_Policy:
-              class: WAF_Policy
-              url: >-
-                https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.9.0.0/examples/quickstart/bigip-configurations/Rapid_Deployment_Policy_13_1.xml
-              enforcementMode: blocking
-              ignoreChanges: false
-            Service_Address_01:
-              class: Service_Address
-              virtualAddress: '{{{SERVICE_ADDRESS_01}}}'
-          HTTP_Service_01:
-            class: Application
-            template: http
-            serviceMain:
-              class: Service_HTTP
-              virtualAddresses:
-                - use: /Tenant_1/Shared/Service_Address_01
-              snat: auto
-              profileHTTP:
-                use: /Tenant_1/Shared/Custom_HTTP_Profile
-              policyWAF:
-                use: /Tenant_1/Shared/Custom_WAF_Policy
-              pool: /Tenant_1/Shared/Shared_Pool
-          HTTPS_Service_01:
-            class: Application
-            template: https
-            serviceMain:
-              class: Service_HTTPS
-              virtualAddresses:
-                - use: /Tenant_1/Shared/Service_Address_01
-              snat: auto
-              pool: /Tenant_1/Shared/Shared_Pool
-              serverTLS:
-                bigip: /Common/clientssl
-              redirect80: false
-              profileHTTP:
-                use: /Tenant_1/Shared/Custom_HTTP_Profile
-              policyWAF:
-                use: /Tenant_1/Shared/Custom_WAF_Policy
     - extensionType: do
       type: inline
       value:
         schemaVersion: 1.0.0
         class: Device
         async: true
-        label: FAILOVER 3NIC BIG-IP declaration for Declarative Onboarding with BYOL
-          license with example Application
+        label: Failover 2NIC BIG-IP declaration for Declarative Onboarding with PAYG
+          license
         Common:
           class: Tenant
           My_DbVariables:
@@ -218,16 +148,6 @@ extension_services:
             gw: '{{{EXTERNAL_GW}}}'
             network: default
             mtu: 1460
-          internalGwRoute:
-            class: Route
-            target: internal
-            network: '{{{INTERNAL_GW}}}/32'
-            mtu: 1460
-          appRoute:
-            class: Route
-            gw: '{{{INTERNAL_GW}}}'
-            network: '10.0.3.0/24'
-            mtu: 1460
           external:
             class: VLAN
             tag: 4094
@@ -245,21 +165,6 @@ extension_services:
               - tcp:4353
               - udp:1026
             trafficGroup: traffic-group-local-only
-          internal:
-            class: VLAN
-            tag: 4093
-            mtu: 1460
-            interfaces:
-              - name: '1.2'
-                tagged: false
-          internal-self:
-            class: SelfIp
-            address: '{{{SELF_IP_INTERNAL}}}/32'
-            vlan: internal
-            allowService:
-              - udp:1026
-              - tcp:4353
-            trafficGroup: traffic-group-local-only
           configSync:
             class: ConfigSync
             configsyncIp: '{{{SELF_IP_EXTERNAL}}}'
@@ -270,8 +175,8 @@ extension_services:
             class: DeviceGroup
             type: sync-failover
             members:
-              - '{{{REMOTE_HOST_NAME}}}'
               - '{{{HOST_NAME}}}'
+              - '{{{REMOTE_HOST_NAME}}}'
             owner: /Common/failoverGroup/members/0
             autoSync: true
             saveOnAutoSync: false
@@ -282,7 +187,7 @@ extension_services:
             class: DeviceTrust
             localUsername: admin
             localPassword: '{{{BIGIP_PASSWORD}}}'
-            remoteHost: '{{{REMOTE_HOST}}}'
+            remoteHost: /Common/failoverGroup/members/0
             remoteUsername: admin
             remotePassword: '{{{BIGIP_PASSWORD}}}'
 pre_onboard_enabled: []
@@ -290,9 +195,6 @@ runtime_parameters:
   - name: SECRET_ID
     type: url
     value: file:///config/cloud/secret_id
-  - name: LICENSE_KEY
-    type: url
-    value: file:///config/cloud/license_key
   - name: BIGIP_PASSWORD
     type: secret
     secretProvider:
@@ -306,21 +208,9 @@ runtime_parameters:
     headers:
       - name: Metadata-Flavor
         value: Google
-  - name: REMOTE_HOST
-    type: url
-    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/bigip-peer-addr
-    headers:
-      - name: Metadata-Flavor
-        value: Google
   - name: REMOTE_HOST_NAME
     type: url
     value: http://169.254.169.254/computeMetadata/v1/instance/attributes/bigip-peer-hostname
-    headers:
-      - name: Metadata-Flavor
-        value: Google
-  - name: REGION
-    type: url
-    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/region
     headers:
       - name: Metadata-Flavor
         value: Google
@@ -333,12 +223,6 @@ runtime_parameters:
   - name: UNIQUE
     type: url
     value: http://169.254.169.254/computeMetadata/v1/instance/attributes/unique-string
-    headers:
-      - name: Metadata-Flavor
-        value: Google
-  - name: SERVICE_ADDRESS_01
-    type: url
-    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/service-address-01-public-ip
     headers:
       - name: Metadata-Flavor
         value: Google
@@ -356,14 +240,6 @@ runtime_parameters:
       field: ip
       index: 0
       ipcalc: address
-  - name: SELF_IP_INTERNAL
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
-      ipcalc: address
   - name: EXTERNAL_GW
     type: metadata
     metadataProvider:
@@ -371,13 +247,5 @@ runtime_parameters:
       type: network
       field: ip
       index: 0
-      ipcalc: first
-  - name: INTERNAL_GW
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
       ipcalc: first
 post_onboard_enabled: []

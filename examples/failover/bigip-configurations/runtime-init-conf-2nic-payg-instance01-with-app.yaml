@@ -20,7 +20,7 @@ extension_services:
         schemaVersion: 1.0.0
         class: Device
         async: true
-        label: FAILOVER 3NIC BIG-IP declaration for Declarative Onboarding with BYOL
+        label: Failover 2NIC BIG-IP declaration for Declarative Onboarding with PAYG
           license with example Application
         Common:
           class: Tenant
@@ -49,10 +49,6 @@ extension_services:
             autoPhonehome: true
             class: System
             hostname: '{{{HOST_NAME}}}'
-          My_License:
-            class: License
-            licenseType: regKey
-            regKey: '{{{LICENSE_KEY}}}'
           admin:
             class: User
             userType: regular
@@ -174,7 +170,7 @@ extension_services:
         schemaVersion: 1.0.0
         class: Device
         async: true
-        label: FAILOVER 3NIC BIG-IP declaration for Declarative Onboarding with BYOL
+        label: Failover 2NIC BIG-IP declaration for Declarative Onboarding with PAYG
           license with example Application
         Common:
           class: Tenant
@@ -218,16 +214,6 @@ extension_services:
             gw: '{{{EXTERNAL_GW}}}'
             network: default
             mtu: 1460
-          internalGwRoute:
-            class: Route
-            target: internal
-            network: '{{{INTERNAL_GW}}}/32'
-            mtu: 1460
-          appRoute:
-            class: Route
-            gw: '{{{INTERNAL_GW}}}'
-            network: '10.0.3.0/24'
-            mtu: 1460
           external:
             class: VLAN
             tag: 4094
@@ -245,21 +231,6 @@ extension_services:
               - tcp:4353
               - udp:1026
             trafficGroup: traffic-group-local-only
-          internal:
-            class: VLAN
-            tag: 4093
-            mtu: 1460
-            interfaces:
-              - name: '1.2'
-                tagged: false
-          internal-self:
-            class: SelfIp
-            address: '{{{SELF_IP_INTERNAL}}}/32'
-            vlan: internal
-            allowService:
-              - udp:1026
-              - tcp:4353
-            trafficGroup: traffic-group-local-only
           configSync:
             class: ConfigSync
             configsyncIp: '{{{SELF_IP_EXTERNAL}}}'
@@ -270,8 +241,8 @@ extension_services:
             class: DeviceGroup
             type: sync-failover
             members:
-              - '{{{REMOTE_HOST_NAME}}}'
               - '{{{HOST_NAME}}}'
+              - '{{{REMOTE_HOST_NAME}}}'
             owner: /Common/failoverGroup/members/0
             autoSync: true
             saveOnAutoSync: false
@@ -282,7 +253,7 @@ extension_services:
             class: DeviceTrust
             localUsername: admin
             localPassword: '{{{BIGIP_PASSWORD}}}'
-            remoteHost: '{{{REMOTE_HOST}}}'
+            remoteHost: /Common/failoverGroup/members/0
             remoteUsername: admin
             remotePassword: '{{{BIGIP_PASSWORD}}}'
 pre_onboard_enabled: []
@@ -290,9 +261,6 @@ runtime_parameters:
   - name: SECRET_ID
     type: url
     value: file:///config/cloud/secret_id
-  - name: LICENSE_KEY
-    type: url
-    value: file:///config/cloud/license_key
   - name: BIGIP_PASSWORD
     type: secret
     secretProvider:
@@ -303,12 +271,6 @@ runtime_parameters:
   - name: HOST_NAME
     type: url
     value: http://169.254.169.254/computeMetadata/v1/instance/attributes/hostname
-    headers:
-      - name: Metadata-Flavor
-        value: Google
-  - name: REMOTE_HOST
-    type: url
-    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/bigip-peer-addr
     headers:
       - name: Metadata-Flavor
         value: Google
@@ -336,15 +298,15 @@ runtime_parameters:
     headers:
       - name: Metadata-Flavor
         value: Google
-  - name: SERVICE_ADDRESS_01
-    type: url
-    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/service-address-01-public-ip
-    headers:
-      - name: Metadata-Flavor
-        value: Google
   - name: FAILOVER_TAG
     type: url
     value: http://169.254.169.254/computeMetadata/v1/instance/attributes/failover-tag
+    headers:
+      - name: Metadata-Flavor
+        value: Google
+  - name: SERVICE_ADDRESS_01
+    type: url
+    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/service-address-01-public-ip
     headers:
       - name: Metadata-Flavor
         value: Google
@@ -356,14 +318,6 @@ runtime_parameters:
       field: ip
       index: 0
       ipcalc: address
-  - name: SELF_IP_INTERNAL
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
-      ipcalc: address
   - name: EXTERNAL_GW
     type: metadata
     metadataProvider:
@@ -371,13 +325,5 @@ runtime_parameters:
       type: network
       field: ip
       index: 0
-      ipcalc: first
-  - name: INTERNAL_GW
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
       ipcalc: first
 post_onboard_enabled: []

@@ -4,14 +4,14 @@ controls:
 extension_packages:
   install_operations:
     - extensionType: do
-      extensionVersion: 1.33.0
-      extensionHash: 4ac7b7c6eb93320df20f964f32ce7bc6e0454858a36440761f774a8a42a01020
+      extensionVersion: 1.39.0
+      extensionHash: 4a67449195a53683a159b42857edd49a757da1a5a2029ccf94c4d6aa11ae4cda
     - extensionType: as3
-      extensionVersion: 3.40.0
-      extensionHash: 708533815cb8e608b4d28fbb730f0ed34617ce5def53c5462c0ab98bd54730fc
+      extensionVersion: 3.46.0
+      extensionHash: 9550bcdcd1ffe1f002fa5e3c71b8818877d9c7e161f5c68027c82ad85e56e924
     - extensionType: cf
-      extensionVersion: 1.13.0
-      extensionHash: 93be496d250838697d8a9aca8bd0e6fe7480549ecd43280279f0a63fc741ab50
+      extensionVersion: 1.15.0
+      extensionHash: 57bbb114eab4e3c73bec6a0f85041ab5317ad881337ffd385b794513fa9df3b3
 extension_services:
   service_operations:
     - extensionType: do
@@ -26,8 +26,6 @@ extension_services:
           class: Tenant
           My_DbVariables:
             class: DbVariables
-            provision.extramb: 1000
-            restjavad.useextramb: true
             config.allow.rfc3927: enable
             dhclient.mgmt: disable
             tm.tcpudptxchecksum: Software-only
@@ -65,11 +63,6 @@ extension_services:
             target: external
             network: '{{{EXTERNAL_GW}}}/32'
             mtu: 1460
-          externalIntRoute:
-            class: Route
-            gw: '{{{EXTERNAL_GW}}}'
-            network: '{{{EXTERNAL_NETWORK}}}/{{{EXTERNAL_BITMASK}}}'
-            mtu: 1460
           default:
             class: Route
             gw: '{{{EXTERNAL_GW}}}'
@@ -103,11 +96,11 @@ extension_services:
           logLevel: silly
         externalStorage:
           scopingTags:
-            f5_cloud_failover_label: bigip_high_availability_solution
+            f5_cloud_failover_label: "{{{FAILOVER_TAG}}}"
         failoverAddresses:
           enabled: true
           scopingTags:
-            f5_cloud_failover_label: bigip_high_availability_solution
+            f5_cloud_failover_label: "{{{FAILOVER_TAG}}}"
           requireScopingTags: false
     - extensionType: as3
       type: inline
@@ -140,7 +133,7 @@ extension_services:
             Custom_WAF_Policy:
               class: WAF_Policy
               url: >-
-                https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.6.0.0/examples/quickstart/bigip-configurations/Rapid_Deployment_Policy_13_1.xml
+                https://raw.githubusercontent.com/F5Networks/f5-google-gdm-templates-v2/v2.9.0.0/examples/quickstart/bigip-configurations/Rapid_Deployment_Policy_13_1.xml
               enforcementMode: blocking
               ignoreChanges: false
             Service_Address_01:
@@ -187,8 +180,6 @@ extension_services:
           class: Tenant
           My_DbVariables:
             class: DbVariables
-            provision.extramb: 1000
-            restjavad.useextramb: true
             config.allow.rfc3927: enable
             dhclient.mgmt: disable
             tm.tcpudptxchecksum: Software-only
@@ -222,11 +213,6 @@ extension_services:
             target: external
             network: '{{{EXTERNAL_GW}}}/32'
             mtu: 1460
-          externalIntRoute:
-            class: Route
-            gw: '{{{EXTERNAL_GW}}}'
-            network: '{{{EXTERNAL_NETWORK}}}/{{{EXTERNAL_BITMASK}}}'
-            mtu: 1460
           default:
             class: Route
             gw: '{{{EXTERNAL_GW}}}'
@@ -236,11 +222,6 @@ extension_services:
             class: Route
             target: internal
             network: '{{{INTERNAL_GW}}}/32'
-            mtu: 1460
-          internalIntRoute:
-            class: Route
-            gw: '{{{INTERNAL_GW}}}'
-            network: '{{{INTERNAL_NETWORK}}}/{{{INTERNAL_BITMASK}}}'
             mtu: 1460
           appRoute:
             class: Route
@@ -355,6 +336,12 @@ runtime_parameters:
     headers:
       - name: Metadata-Flavor
         value: Google
+  - name: FAILOVER_TAG
+    type: url
+    value: http://169.254.169.254/computeMetadata/v1/instance/attributes/failover-tag
+    headers:
+      - name: Metadata-Flavor
+        value: Google
   - name: SELF_IP_EXTERNAL
     type: metadata
     metadataProvider:
@@ -387,36 +374,4 @@ runtime_parameters:
       field: ip
       index: 2
       ipcalc: first
-  - name: EXTERNAL_BITMASK
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 0
-      ipcalc: bitmask
-  - name: INTERNAL_BITMASK
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
-      ipcalc: bitmask
-  - name: EXTERNAL_NETWORK
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 0
-      ipcalc: base
-  - name: INTERNAL_NETWORK
-    type: metadata
-    metadataProvider:
-      environment: gcp
-      type: network
-      field: ip
-      index: 2
-      ipcalc: base
 post_onboard_enabled: []
